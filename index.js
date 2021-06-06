@@ -23,7 +23,7 @@ app.post("/spend", (req, res) => {
     pointsMap,
     transactions
   );
-  transactions = newTransactions;
+  transactions = newTransactions ?? transactions;
   res.status(200).send(results);
 });
 
