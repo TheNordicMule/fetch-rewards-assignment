@@ -2,7 +2,6 @@ const storePointsChange = (payer, pointChange, pointsMap) => {
   const points = pointsMap.get(payer) || 0;
   const newPoints = points + pointChange;
   pointsMap.set(payer, newPoints);
-  return newPoints;
 };
 
 const isSpentPointsTooLarge = (spentPoints, pointsMap) => {
@@ -21,35 +20,38 @@ const calculateSpendPoint = (spentPoints, pointsMap, transactions) => {
   const sortedTransactions = transactions.sort(
     (first, second) => new Date(first.timestamp) - new Date(second.timestamp)
   );
-  let remainingSpentPoints = spentPoints;
+  let totalPoints = 0;
   let index = 0;
   let results = [];
-  let sortedTransaction = sortedTransactions[index];
-  while (remainingSpentPoints - sortedTransaction.points > 0) {
-    const playerPoint = pointsMap.get(sortedTransaction.payer);
-    const substractedPoint = Math.min(playerPoint, sortedTransaction.points);
-    remainingSpentPoints -= substractedPoint;
-    const { payer, points } = sortedTransaction;
-    results[payer] = results[payer]
-      ? { payer, points: results[payer].points - points }
-      : { payer, points: -points };
-    storePointsChange(payer, -points, pointsMap);
+  while (totalPoints < spentPoints && index < sortedTransactions.length) {
+    const { payer, points, timestamp } = sortedTransactions[index];
+    const playerBalance = pointsMap.get(payer);
+    const paidPoint = Math.min(points, playerBalance);
+    results[payer] = {
+      payer,
+      points: results[payer] ? results[payer].points - paidPoint : -paidPoint,
+    };
+    totalPoints += paidPoint;
+    if (totalPoints > spentPoints) {
+      const overAmount = totalPoints - spentPoints;
+      const newTransaction = {
+        payer,
+        points: overAmount,
+        timestamp,
+      };
+      sortedTransactions.push(newTransaction);
+      storePointsChange(payer, overAmount - paidPoint, pointsMap);
+      results[payer] = {
+        payer,
+        points: results[payer].points + overAmount,
+      };
+      break;
+    }
     index += 1;
-    sortedTransaction = sortedTransactions[index];
+    storePointsChange(payer, -paidPoint, pointsMap);
   }
-  const lastTransaction = sortedTransactions[index];
-  const { points: newAmount, payer, timestamp } = lastTransaction;
-  const newTransaction = {
-    payer,
-    points: newAmount - remainingSpentPoints,
-    timestamp,
-  };
-  results[payer] = results[payer]
-    ? { payer, points: results[payer].points - remainingSpentPoints }
-    : { payer, points: -remainingSpentPoints };
+  sortedTransactions.splice(0, index + 1);
   results = Object.values(results);
-  storePointsChange(payer, -remainingSpentPoints, pointsMap);
-  sortedTransactions.splice(0, index + 1, newTransaction);
   return { results, newTransactions: sortedTransactions };
 };
 
